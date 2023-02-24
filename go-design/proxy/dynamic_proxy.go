@@ -11,6 +11,29 @@ import (
 	"text/template"
 )
 
+type proxyData struct {
+	// 包名
+	Package string
+	// 需要代理的类名
+	ProxyStructName string
+	// 需要代理的方法
+	Methods []*proxyMethod
+}
+
+// proxyMethod 代理的方法
+type proxyMethod struct {
+	// 方法名
+	Name string
+	// 参数，含参数类型
+	Params string
+	// 参数名
+	ParamNames string
+	// 返回值
+	Results string
+	// 返回值名
+	ResultNames string
+}
+
 // 生成代理类的文件模板
 const proxyTpl = `
 package {{.Package}}
@@ -38,27 +61,48 @@ func (p *{{$.ProxyStructName}}Proxy) {{ .Name }} ({{ .Params }}) ({{ .Results }}
 {{ end }}
 `
 
-type proxyData struct {
-	// 包名
-	Package string
-	// 需要代理的类名
-	ProxyStructName string
-	// 需要代理的方法
-	Methods []*proxyMethod
+func getProxyInterfaceName(groups []*ast.CommentGroup) string {
+	for _, commentGroup := range groups {
+		for _, comment := range commentGroup.List {
+			if strings.Contains(comment.Text, "@proxy") {
+				interfaceName := strings.TrimLeft(comment.Text, "// @proxy ")
+				return strings.TrimSpace(interfaceName)
+			}
+		}
+	}
+	return ""
 }
 
-// proxyMethod 代理的方法
-type proxyMethod struct {
-	// 方法名
-	Name string
-	// 参数，含参数类型
-	Params string
-	// 参数名
-	ParamNames string
-	// 返回值
-	Results string
-	// 返回值名
-	ResultNames string
+// getParamsOrResults 获取参数或者是返回值
+// 返回带类型的参数，以及不带类型的参数，以逗号间隔
+func getParamsOrResults(fields *ast.FieldList) (string, string) {
+	var (
+		params     []string
+		paramNames []string
+	)
+
+	for i, param := range fields.List {
+		// 循环获取所有的参数名
+		var names []string
+		for _, name := range param.Names {
+			names = append(names, name.Name)
+		}
+
+		if len(names) == 0 {
+			names = append(names, fmt.Sprintf("r%d", i))
+		}
+
+		paramNames = append(paramNames, names...)
+
+		// 参数名加参数类型组成完整的参数
+		param := fmt.Sprintf("%s %s",
+			strings.Join(names, ","),
+			param.Type.(*ast.Ident).Name,
+		)
+		params = append(params, strings.TrimSpace(param))
+	}
+
+	return strings.Join(params, ","), strings.Join(paramNames, ",")
 }
 
 func generate(file string) (string, error) {
@@ -130,46 +174,3 @@ func generate(file string) (string, error) {
 	return string(src), nil
 }
 
-// getParamsOrResults 获取参数或者是返回值
-// 返回带类型的参数，以及不带类型的参数，以逗号间隔
-func getParamsOrResults(fields *ast.FieldList) (string, string) {
-	var (
-		params     []string
-		paramNames []string
-	)
-
-	for i, param := range fields.List {
-		// 循环获取所有的参数名
-		var names []string
-		for _, name := range param.Names {
-			names = append(names, name.Name)
-		}
-
-		if len(names) == 0 {
-			names = append(names, fmt.Sprintf("r%d", i))
-		}
-
-		paramNames = append(paramNames, names...)
-
-		// 参数名加参数类型组成完整的参数
-		param := fmt.Sprintf("%s %s",
-			strings.Join(names, ","),
-			param.Type.(*ast.Ident).Name,
-		)
-		params = append(params, strings.TrimSpace(param))
-	}
-
-	return strings.Join(params, ","), strings.Join(paramNames, ",")
-}
-
-func getProxyInterfaceName(groups []*ast.CommentGroup) string {
-	for _, commentGroup := range groups {
-		for _, comment := range commentGroup.List {
-			if strings.Contains(comment.Text, "@proxy") {
-				interfaceName := strings.TrimLeft(comment.Text, "// @proxy ")
-				return strings.TrimSpace(interfaceName)
-			}
-		}
-	}
-	return ""
-}
