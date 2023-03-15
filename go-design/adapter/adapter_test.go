@@ -1,18 +1,23 @@
 package adapter
 
-import "testing"
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
 func TestAliAdapter_FileSystem(t *testing.T) {
 	// 初始化 连接参数
 	var client = AliClient{}
 	// 初始化 适配器
-	aliOss := AliAdapter{adapter: client}
+	ali := AliAdapter{LocalClient: client}
 	// 获取 操作对象
-	aliOss.FileSystem()
+	err := ali.FileSystem()
+	assert.Nil(t, err)
 }
 
 func TestAWSAdapter_FileSystem(t *testing.T) {
 	var client = AWSClient{}
-	aws := AWSAdapter{adapter: client}
-	aws.FileSystem()
+	aws := AWSAdapter{LocalClient: client}
+	err := aws.FileSystem()
+	assert.Nil(t, err)
 }
